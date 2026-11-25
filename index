@@ -1,0 +1,1711 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ZPL Studio — ZPL to PDF & PNG Converter</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.6/dist/JsBarcode.all.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <style>
+    :root {
+      --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: var(--font-sans);
+      background-color: #f1f5f9;
+      color: #0f172a;
+      margin: 0;
+      padding: 0;
+    }
+
+    /* Syntax-highlighted ZPL Editor Overlay */
+    .editor-container {
+      position: relative;
+      font-family: var(--font-mono);
+      font-size: 13px;
+      line-height: 1.6;
+      background-color: #ffffff;
+    }
+
+    .editor-backdrop,
+    .editor-textarea {
+      font-family: var(--font-mono);
+      font-size: 13px;
+      line-height: 1.6;
+      letter-spacing: 0;
+      padding: 14px 16px;
+      tab-size: 2;
+      white-space: pre-wrap;
+      word-wrap: break-word;
+      overflow-wrap: break-word;
+      border: none;
+      outline: none;
+    }
+
+    .editor-backdrop {
+      color: #1e293b;
+      pointer-events: none;
+      user-select: none;
+      z-index: 1;
+    }
+
+    .editor-textarea {
+      color: transparent;
+      caret-color: #0f172a;
+      background: transparent;
+      resize: none;
+      z-index: 2;
+    }
+
+    .editor-textarea::selection {
+      background-color: rgba(37, 99, 235, 0.22);
+      color: transparent;
+    }
+
+    /* ZPL Syntax Tokens (Clean Light Studio Palette) */
+    .zpl-frame {
+      color: #059669;
+      font-weight: 700;
+    }
+
+    .zpl-cmd {
+      color: #2563eb;
+      font-weight: 600;
+    }
+
+    .zpl-data {
+      color: #0f172a;
+      font-weight: 500;
+    }
+
+    .zpl-comment {
+      color: #64748b;
+      font-style: italic;
+    }
+
+    /* Preview Viewport Backdrops */
+    .preview-grid-light {
+      background-color: #e2e8f0;
+      background-image:
+        linear-gradient(45deg, #cbd5e1 25%, transparent 25%),
+        linear-gradient(-45deg, #cbd5e1 25%, transparent 25%),
+        linear-gradient(45deg, transparent 75%, #cbd5e1 75%),
+        linear-gradient(-45deg, transparent 75%, #cbd5e1 75%);
+      background-size: 20px 20px;
+      background-position: 0 0, 0 10px, 10px -10px, -10px 0;
+    }
+
+    .preview-grid-dark {
+      background-color: #1e293b;
+      background-image:
+        linear-gradient(45deg, #0f172a 25%, transparent 25%),
+        linear-gradient(-45deg, #0f172a 25%, transparent 25%),
+        linear-gradient(45deg, transparent 75%, #0f172a 75%),
+        linear-gradient(-45deg, transparent 75%, #0f172a 75%);
+      background-size: 20px 20px;
+      background-position: 0 0, 0 10px, 10px -10px, -10px 0;
+    }
+
+    /* Label Sheet Shadow & Crisp Industrial Edges */
+    .label-sheet {
+      background: #ffffff;
+      box-shadow:
+        0 10px 25px -5px rgba(15, 23, 42, 0.16),
+        0 4px 10px -2px rgba(15, 23, 42, 0.08),
+        0 0 0 1px rgba(148, 163, 184, 0.45);
+      transition: transform 0.18s ease, box-shadow 0.18s ease;
+    }
+
+    /* Subtle Custom Scrollbars */
+    ::-webkit-scrollbar {
+      width: 7px;
+      height: 7px;
+    }
+
+    ::-webkit-scrollbar-track {
+      background: transparent;
+    }
+
+    ::-webkit-scrollbar-thumb {
+      background: #cbd5e1;
+      border-radius: 9999px;
+    }
+
+    ::-webkit-scrollbar-thumb:hover {
+      background: #94a3b8;
+    }
+  </style>
+</head>
+<body class="min-h-screen lg:h-screen lg:overflow-hidden flex flex-col bg-slate-100 text-slate-900">
+
+  <!-- Top Navigation Header (Dark Slate Industrial Engineering Bar) -->
+  <header class="bg-slate-900 text-white border-b border-slate-800 px-4 py-2.5 flex items-center justify-between gap-3 shrink-0 z-20">
+    <div class="flex items-center gap-3">
+      <div class="w-9 h-9 rounded-lg bg-blue-600 flex items-center justify-center shadow-sm border border-blue-500/50">
+        <i data-lucide="printer" class="w-5 h-5 text-white"></i>
+      </div>
+      <div>
+        <div class="flex items-center gap-2">
+          <h1 class="text-base font-bold tracking-tight text-white">ZPL Studio</h1>
+          <span class="text-[11px] font-mono px-2 py-0.5 rounded-full bg-slate-800 text-slate-300 border border-slate-700">ZPL II → PDF / PNG</span>
+        </div>
+        <p class="text-xs text-slate-400 hidden sm:block">Thermal Label Renderer, Batch Converter &amp; Vector PDF Exporter</p>
+      </div>
+    </div>
+
+    <div class="flex items-center gap-2">
+      <!-- Live Status Pill -->
+      <div class="hidden md:flex items-center gap-2 px-3 py-1.5 rounded-lg bg-slate-800/90 border border-slate-700 text-xs">
+        <span id="status-dot" class="w-2 h-2 rounded-full bg-emerald-400"></span>
+        <span id="status-text" class="text-slate-200 font-medium">Ready</span>
+        <span class="text-slate-600">|</span>
+        <span id="badge-renderer" class="font-mono text-[11px] text-slate-400">Labelary API</span>
+      </div>
+
+      <button id="btn-force-render" class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-100 border border-slate-700 text-xs font-medium transition cursor-pointer" title="Re-render label preview">
+        <i data-lucide="refresh-cw" class="w-3.5 h-3.5 text-blue-400"></i>
+        <span>Render</span>
+      </button>
+    </div>
+  </header>
+
+  <!-- Main Split-Pane Studio Workspace -->
+  <main class="flex-1 flex flex-col lg:flex-row min-h-0 overflow-hidden">
+
+    <!-- LEFT PANE: ZPL II Source Editor & Batch File Manager -->
+    <section class="w-full lg:w-[46%] xl:w-[44%] flex flex-col bg-white border-b lg:border-b-0 lg:border-r border-slate-200 min-h-[380px] lg:min-h-0">
+
+      <!-- Editor Toolbar -->
+      <div class="px-3.5 py-2.5 bg-slate-50 border-b border-slate-200 flex flex-wrap items-center justify-between gap-2 shrink-0">
+        <div class="flex items-center gap-2">
+          <span class="text-xs font-mono font-semibold text-slate-700 flex items-center gap-1.5">
+            <i data-lucide="code-2" class="w-3.5 h-3.5 text-blue-600"></i>
+            ZPL II SOURCE
+          </span>
+          <select id="select-template" class="rounded-lg bg-white border border-slate-300 text-xs text-slate-700 px-2.5 py-1 focus:border-blue-500 focus:outline-none cursor-pointer shadow-2xs">
+            <option value="" disabled selected>Load Template...</option>
+            <option value="shipping">4"×6" Carrier Shipping Label</option>
+            <option value="product">2.25"×1.25" Product Barcode Tag</option>
+            <option value="asset">3"×2" IT Asset &amp; QR Tag</option>
+            <option value="multi">Multi-Label Batch (3 Labels)</option>
+          </select>
+        </div>
+
+        <div class="flex items-center gap-1.5">
+          <input type="file" id="file-upload" accept=".zpl,.txt,.prn,.lbl" multiple class="hidden" />
+          <button id="btn-upload" class="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 text-xs font-medium transition cursor-pointer" title="Upload one or more .zpl, .txt, .prn, or .lbl files">
+            <i data-lucide="folder-up" class="w-3.5 h-3.5"></i>
+            <span>Load Files</span>
+          </button>
+          <button id="btn-paste" class="flex items-center gap-1 px-2 py-1 rounded-lg bg-white hover:bg-slate-100 text-slate-700 border border-slate-300 text-xs font-medium transition cursor-pointer" title="Paste from Clipboard">
+            <i data-lucide="clipboard-paste" class="w-3.5 h-3.5 text-slate-500"></i>
+            <span>Paste</span>
+          </button>
+          <button id="btn-copy-zpl" class="flex items-center gap-1 px-2 py-1 rounded-lg bg-white hover:bg-slate-100 text-slate-700 border border-slate-300 text-xs font-medium transition cursor-pointer" title="Copy ZPL Code">
+            <i data-lucide="copy" class="w-3.5 h-3.5 text-slate-500"></i>
+            <span>Copy</span>
+          </button>
+          <button id="btn-clear" class="flex items-center gap-1 px-2 py-1 rounded-lg bg-white hover:bg-red-50 hover:text-red-600 hover:border-red-200 text-slate-500 border border-slate-300 text-xs transition cursor-pointer" title="Clear Editor">
+            <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
+          </button>
+        </div>
+      </div>
+
+      <!-- Loaded Files Batch Manager Strip (Clean Light-Slate Studio Style) -->
+      <div id="batch-files-bar" class="hidden px-3.5 py-2 bg-slate-50/90 border-b border-slate-200 flex flex-col gap-2 shrink-0">
+        <div class="flex flex-wrap items-center justify-between gap-2">
+          <div class="flex items-center gap-2 text-xs text-slate-700">
+            <i data-lucide="files" class="w-3.5 h-3.5 text-blue-600"></i>
+            <span class="font-semibold text-slate-800">Loaded Files</span>
+            <span id="batch-summary-badge" class="font-mono text-[11px] px-2 py-0.5 rounded-full bg-white text-slate-600 border border-slate-300">0 files · 0 labels</span>
+          </div>
+          <div class="flex items-center gap-1.5">
+            <button id="btn-merge-files" class="flex items-center gap-1 px-2 py-1 rounded-lg bg-white hover:bg-slate-100 text-slate-700 border border-slate-300 text-[11px] font-medium transition cursor-pointer" title="Merge all loaded files into one combined ZPL document">
+              <i data-lucide="combine" class="w-3 h-3 text-blue-600"></i>
+              <span>Merge All</span>
+            </button>
+            <button id="btn-batch-pdf" class="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-semibold shadow-2xs transition cursor-pointer" title="Convert all loaded files & labels into a single multi-page PDF">
+              <i data-lucide="file-stack" class="w-3 h-3"></i>
+              <span>Convert All Files to PDF</span>
+            </button>
+            <button id="btn-clear-files" class="p-1 rounded-lg bg-white hover:bg-red-50 text-slate-500 hover:text-red-600 border border-slate-300 text-[11px] transition cursor-pointer" title="Close All Files">
+              <i data-lucide="x" class="w-3 h-3"></i>
+            </button>
+          </div>
+        </div>
+        <!-- Scrollable File Pills -->
+        <div id="batch-files-list" class="flex items-center gap-1.5 overflow-x-auto pb-0.5"></div>
+      </div>
+
+      <!-- Syntax-Highlighted ZPL Editor Area with Drag & Drop Overlay -->
+      <div id="editor-dropzone" class="editor-container flex-1 min-h-[260px] lg:min-h-0 overflow-hidden relative">
+        <pre id="zpl-backdrop" class="editor-backdrop absolute inset-0 m-0 overflow-hidden" aria-hidden="true"></pre>
+        <textarea
+          id="zpl-editor"
+          spellcheck="false"
+          autocomplete="off"
+          autocapitalize="off"
+          placeholder="Enter or paste ZPL code starting with ^XA and ending with ^XZ, or drag & drop multiple .zpl files here..."
+          class="editor-textarea absolute inset-0 w-full h-full m-0 focus:outline-none"
+        ></textarea>
+        <!-- Drag-and-Drop Overlay -->
+        <div id="dropzone-overlay" class="hidden pointer-events-none absolute inset-2 rounded-xl border-2 border-dashed border-blue-500 bg-slate-50/95 backdrop-blur-xs z-20 flex flex-col items-center justify-center text-center p-4">
+          <div class="w-11 h-11 rounded-full bg-blue-100 border border-blue-200 flex items-center justify-center mb-2">
+            <i data-lucide="file-plus-2" class="w-5 h-5 text-blue-600"></i>
+          </div>
+          <p class="text-sm font-semibold text-slate-900">Drop ZPL Files to Load Batch</p>
+          <p class="text-xs text-slate-500 mt-0.5">Supports multiple .zpl, .txt, .prn, or .lbl files</p>
+        </div>
+      </div>
+
+      <!-- Editor Footer Status Bar -->
+      <div class="px-3.5 py-2 bg-slate-50 border-t border-slate-200 flex flex-wrap items-center justify-between gap-2 text-[11px] font-mono text-slate-500 shrink-0">
+        <div class="flex items-center gap-3">
+          <span id="stat-lines">0 lines</span>
+          <span>•</span>
+          <span id="stat-chars">0 chars</span>
+          <span>•</span>
+          <span id="stat-dots" class="text-slate-700 font-medium">812 × 1218 dots</span>
+        </div>
+        <label class="flex items-center gap-1.5 font-sans text-xs text-slate-600 cursor-pointer select-none">
+          <input type="checkbox" id="chk-auto-render" checked class="rounded border-slate-300 text-blue-600 focus:ring-blue-500" />
+          <span>Auto-render</span>
+        </label>
+      </div>
+    </section>
+
+    <!-- RIGHT PANE: Printer Calibration, Live Preview & PDF/PNG Export -->
+    <section class="flex-1 flex flex-col bg-slate-100 min-h-0">
+
+      <!-- Printer & Media Calibration Bar -->
+      <div class="bg-white border-b border-slate-200 px-4 py-2.5 flex flex-wrap items-center justify-between gap-3 shrink-0">
+
+        <!-- Media & Printhead Controls -->
+        <div class="flex flex-wrap items-center gap-2.5">
+          <!-- Print Density (dpmm) -->
+          <div class="flex items-center gap-1.5">
+            <label for="select-dpmm" class="text-[11px] font-semibold uppercase tracking-wider text-slate-500">Density</label>
+            <select id="select-dpmm" class="rounded-lg bg-slate-50 border border-slate-300 text-xs font-medium text-slate-800 px-2 py-1.5 focus:border-blue-500 focus:bg-white focus:outline-none cursor-pointer">
+              <option value="6">6 dpmm (152 DPI)</option>
+              <option value="8" selected>8 dpmm (203 DPI)</option>
+              <option value="12">12 dpmm (300 DPI)</option>
+              <option value="24">24 dpmm (600 DPI)</option>
+            </select>
+          </div>
+
+          <!-- Size Preset -->
+          <div class="flex items-center gap-1.5">
+            <label for="select-preset" class="text-[11px] font-semibold uppercase tracking-wider text-slate-500">Size</label>
+            <select id="select-preset" class="rounded-lg bg-slate-50 border border-slate-300 text-xs font-medium text-slate-800 px-2 py-1.5 focus:border-blue-500 focus:bg-white focus:outline-none cursor-pointer">
+              <option value="4x6" selected>4" × 6" (Shipping)</option>
+              <option value="4x4">4" × 4" (Square)</option>
+              <option value="4x2">4" × 2" (Logistics)</option>
+              <option value="3x2">3" × 2" (Asset Tag)</option>
+              <option value="2.25x1.25">2.25" × 1.25" (Retail)</option>
+              <option value="custom">Custom Size</option>
+            </select>
+          </div>
+
+          <!-- Custom Width × Height + Unit -->
+          <div class="flex items-center gap-1 bg-slate-50 border border-slate-300 rounded-lg px-2 py-1">
+            <input type="number" id="input-width" value="4" step="0.1" min="0.5" max="24" class="w-12 text-xs font-mono text-center bg-transparent text-slate-800 focus:outline-none" aria-label="Label width" />
+            <span class="text-xs text-slate-400">×</span>
+            <input type="number" id="input-height" value="6" step="0.1" min="0.5" max="36" class="w-12 text-xs font-mono text-center bg-transparent text-slate-800 focus:outline-none" aria-label="Label height" />
+            <select id="select-unit" class="text-xs font-mono font-semibold text-blue-600 bg-transparent border-l border-slate-300 pl-1.5 focus:outline-none cursor-pointer">
+              <option value="in" selected>in</option>
+              <option value="mm">mm</option>
+            </select>
+          </div>
+
+          <!-- Rotation -->
+          <div class="flex items-center gap-1.5">
+            <label for="select-rotation" class="text-[11px] font-semibold uppercase tracking-wider text-slate-500">Rotate</label>
+            <select id="select-rotation" class="rounded-lg bg-slate-50 border border-slate-300 text-xs font-medium text-slate-800 px-2 py-1.5 focus:border-blue-500 focus:bg-white focus:outline-none cursor-pointer">
+              <option value="0" selected>0°</option>
+              <option value="90">90°</option>
+              <option value="180">180°</option>
+              <option value="270">270°</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- Primary Export Actions -->
+        <div class="flex items-center gap-2">
+          <button id="btn-download-png" class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white hover:bg-slate-50 text-slate-800 border border-slate-300 text-xs font-semibold shadow-2xs transition cursor-pointer">
+            <i data-lucide="image" class="w-3.5 h-3.5 text-slate-600"></i>
+            <span>PNG</span>
+          </button>
+
+          <!-- Split PDF Export Button -->
+          <div class="relative inline-flex rounded-lg shadow-xs">
+            <button id="btn-download-pdf" class="flex items-center gap-1.5 px-3.5 py-1.5 rounded-l-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold transition cursor-pointer">
+              <i data-lucide="file-down" class="w-3.5 h-3.5"></i>
+              <span>Download PDF</span>
+            </button>
+            <button id="btn-pdf-menu-toggle" class="px-2 py-1.5 rounded-r-lg bg-emerald-700 hover:bg-emerald-800 text-white border-l border-emerald-500/50 text-xs transition cursor-pointer" aria-label="More PDF export options">
+              <i data-lucide="chevron-down" class="w-3.5 h-3.5"></i>
+            </button>
+
+            <!-- Dropdown Menu -->
+            <div id="pdf-dropdown-menu" class="hidden absolute right-0 top-full mt-1.5 w-64 rounded-xl bg-white border border-slate-200 shadow-xl py-1.5 z-30">
+              <button id="btn-pdf-current" class="w-full text-left px-3.5 py-2 text-xs hover:bg-slate-50 flex items-center justify-between text-slate-800 font-medium cursor-pointer">
+                <span>Current Label Only (1 Page)</span>
+                <span class="text-[10px] font-mono text-slate-400">PDF</span>
+              </button>
+              <button id="btn-pdf-all" class="w-full text-left px-3.5 py-2 text-xs hover:bg-slate-50 flex items-center justify-between text-slate-800 font-medium cursor-pointer">
+                <span>All Labels in Active File</span>
+                <span id="dropdown-all-count" class="text-[10px] font-mono px-1.5 py-0.5 rounded bg-blue-50 text-blue-700 border border-blue-200">1 pg</span>
+              </button>
+              <div class="my-1 border-t border-slate-100"></div>
+              <button id="btn-pdf-all-files" class="w-full text-left px-3.5 py-2 text-xs hover:bg-emerald-50 flex items-center justify-between text-emerald-700 font-semibold cursor-pointer">
+                <span>All Loaded Files (Batch PDF)</span>
+                <span id="dropdown-all-files-count" class="text-[10px] font-mono px-1.5 py-0.5 rounded bg-emerald-600 text-white">1 file</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Secondary Preview Controls Bar (Label Navigation, Zoom & Canvas Backdrop) -->
+      <div class="bg-slate-50 border-b border-slate-200 px-4 py-1.5 flex flex-wrap items-center justify-between gap-2 text-xs shrink-0">
+        <!-- Multi-Label Navigator -->
+        <div class="flex items-center gap-1.5">
+          <span class="text-slate-500 font-medium">Label:</span>
+          <button id="btn-prev-label" class="p-1 rounded bg-white hover:bg-slate-100 border border-slate-300 text-slate-600 disabled:opacity-40 cursor-pointer" title="Previous label">
+            <i data-lucide="chevron-left" class="w-3.5 h-3.5"></i>
+          </button>
+          <select id="select-label-index" class="rounded bg-white border border-slate-300 text-xs font-mono px-2 py-0.5 text-slate-800 focus:outline-none cursor-pointer">
+            <option value="0">1 of 1</option>
+          </select>
+          <button id="btn-next-label" class="p-1 rounded bg-white hover:bg-slate-100 border border-slate-300 text-slate-600 disabled:opacity-40 cursor-pointer" title="Next label">
+            <i data-lucide="chevron-right" class="w-3.5 h-3.5"></i>
+          </button>
+          <span id="label-count-badge" class="ml-1 text-[11px] font-mono px-1.5 py-0.5 rounded bg-slate-200/80 text-slate-700">1 label</span>
+        </div>
+
+        <!-- Zoom & Stage Backdrop Controls -->
+        <div class="flex items-center gap-2">
+          <div class="flex items-center bg-white border border-slate-300 rounded-lg overflow-hidden">
+            <button id="btn-zoom-out" class="px-2 py-1 hover:bg-slate-100 text-slate-600 border-r border-slate-200 cursor-pointer" title="Zoom out">
+              <i data-lucide="zoom-out" class="w-3.5 h-3.5"></i>
+            </button>
+            <span id="zoom-level-label" class="px-2.5 py-0.5 font-mono text-[11px] font-medium text-slate-700 min-w-[46px] text-center">Fit</span>
+            <button id="btn-zoom-in" class="px-2 py-1 hover:bg-slate-100 text-slate-600 border-l border-slate-200 cursor-pointer" title="Zoom in">
+              <i data-lucide="zoom-in" class="w-3.5 h-3.5"></i>
+            </button>
+          </div>
+          <button id="btn-zoom-fit" class="px-2 py-1 rounded-lg bg-white hover:bg-slate-100 border border-slate-300 text-[11px] font-medium text-slate-700 cursor-pointer">
+            Fit
+          </button>
+          <button id="btn-toggle-bg" class="flex items-center gap-1 px-2 py-1 rounded-lg bg-white hover:bg-slate-100 border border-slate-300 text-[11px] font-medium text-slate-700 cursor-pointer" title="Toggle preview backdrop">
+            <i data-lucide="contrast" class="w-3.5 h-3.5 text-slate-500"></i>
+            <span id="bg-mode-text">Light Grid</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Interactive Label Preview Stage -->
+      <div id="preview-viewport" class="preview-grid-light flex-1 overflow-auto p-6 flex items-center justify-center relative min-h-[340px]">
+        <!-- Loading Spinner Overlay -->
+        <div id="preview-loader" class="hidden absolute inset-0 bg-slate-900/20 backdrop-blur-[1px] z-20 flex items-center justify-center">
+          <div class="bg-white border border-slate-200 rounded-xl px-4 py-3 shadow-lg flex items-center gap-2.5">
+            <i data-lucide="loader-2" class="w-4 h-4 text-blue-600 animate-spin"></i>
+            <span class="text-xs font-medium text-slate-700">Rendering thermal label...</span>
+          </div>
+        </div>
+
+        <!-- Centered Label Paper + Dimension Rulers -->
+        <div id="label-stage" class="flex flex-col items-center">
+          <!-- Top Width Ruler -->
+          <div class="w-full flex items-center justify-between text-[10px] font-mono text-slate-600 bg-white/90 border border-slate-300/80 rounded-t-md px-2 py-0.5 mb-1.5 shadow-2xs">
+            <span>0</span>
+            <span id="ruler-width-text" class="font-semibold text-slate-800">4.0" (101.6 mm)</span>
+            <span id="ruler-width-end">4.0"</span>
+          </div>
+
+          <div class="flex items-stretch gap-1.5">
+            <!-- Label Paper Surface -->
+            <div id="label-paper" class="label-sheet rounded-xs overflow-hidden flex items-center justify-center">
+              <img id="preview-image" alt="Rendered ZPL Label Preview" class="block max-w-none select-none" />
+              <canvas id="fallback-canvas" class="hidden block max-w-none"></canvas>
+            </div>
+
+            <!-- Right Height Ruler -->
+            <div class="flex flex-col items-center justify-between text-[10px] font-mono text-slate-600 bg-white/90 border border-slate-300/80 rounded-r-md px-1 py-1.5 shadow-2xs">
+              <span>0</span>
+              <span id="ruler-height-text" class="font-semibold text-slate-800 [writing-mode:vertical-rl] rotate-180">6.0" (152.4 mm)</span>
+              <span id="ruler-height-end">6.0"</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Preview Pane Footer Metadata -->
+      <div class="bg-white border-t border-slate-200 px-4 py-2 flex flex-wrap items-center justify-between gap-2 text-[11px] text-slate-500 shrink-0">
+        <div class="flex items-center gap-3 font-mono">
+          <span id="badge-dimensions" class="text-slate-700 font-medium">4.0" × 6.0"</span>
+          <span>•</span>
+          <span id="badge-dpi">203 DPI (8 dpmm)</span>
+          <span>•</span>
+          <span>Output: <strong id="output-filename-preview" class="text-slate-700">label_4x6_203dpi.pdf</strong></span>
+        </div>
+        <div id="render-footnote" class="text-slate-500">
+          Vector PDF &amp; crisp PNG output calibrated to physical media dimensions
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <!-- Toast Notification Container -->
+  <div id="toast-container" class="fixed bottom-4 right-4 z-50 flex flex-col gap-2 pointer-events-none"></div>
+
+  <script>
+    // =========================================================================
+    // 1. ZPL PRESET TEMPLATES
+    // =========================================================================
+    const ZPL_TEMPLATES = {
+      shipping: `^XA
+^FX === 4x6 CARRIER PRIORITY SHIPPING LABEL ===
+^FO30,30^GB752,1158,4^FS
+^FO30,190^GB752,0,4^FS
+^FO210,30^GB0,160,4^FS
+
+^FX --- Carrier Service Header ---
+^CF0,115
+^FO72,56^FDP^FS
+^CF0,32
+^FO235,54^FDPRIORITY MAIL 2-DAY^FS
+^CF0,24
+^FO235,96^FDCOMMERCIAL BASE PRICING^FS
+^FO235,128^FDWT: 2.40 LBS   ZONE: 04^FS
+
+^FX --- Ship From Block ---
+^CF0,22
+^FO52,212^FDFROM:^FS
+^FO52,240^FDACME FULFILLMENT CENTER^FS
+^FO52,266^FD1450 INDUSTRIAL PKWY STE 200^FS
+^FO52,292^FDONTARIO, CA 91761-4420^FS
+^FO30,335^GB752,0,3^FS
+
+^FX --- Ship To Recipient Block ---
+^CF0,24
+^FO52,358^FDSHIP TO:^FS
+^CF0,38
+^FO85,395^FDJORDAN VANCE^FS
+^FO85,442^FD742 EVERGREEN TERRACE^FS
+^FO85,489^FDSEATTLE, WA 98101-3210^FS
+^FO30,555^GB752,0,4^FS
+
+^FX --- Routing & QR Verification ---
+^CF0,28
+^FO52,580^FDROUTING: SEA-09-B4^FS
+^CF0,24
+^FO52,620^FDORDER #: SO-2026-88419^FS
+^FO52,655^FDSKU: ZPL-THERMAL-4X6^FS
+^FO595,570^BQN,2,5^FDQA,https://zpl.studio/track/9405511899562841920411^FS
+^FO30,740^GB752,0,4^FS
+
+^FX --- Primary Tracking Barcode (Code 128, No Bottom Code Text) ---
+^CF0,26
+^FO235,762^FDUSPS TRACKING # EP^FS
+^BY2,3,155
+^FO115,805^BCN,155,N,N,N^FD9405511899562841920411^FS
+^FO30,1045^GB752,0,4^FS
+
+^FX --- Footer ---
+^CF0,22
+^FO52,1072^FDTHANK YOU FOR SHIPPING WITH ACME LOGISTICS^FS
+^FO52,1106^FDPRINTED VIA ZPL STUDIO  |  203 DPI THERMAL^FS
+^XZ`,
+
+      product: `^XA
+^FX === 2.25 x 1.25 RETAIL PRODUCT BARCODE TAG ===
+^FO16,14^GB424,226,3^FS
+^CF0,26
+^FO30,28^FDINDUSTRIAL THERMAL ROLL^FS
+^CF0,20
+^FO30,60^FD4" x 6" DIRECT THERMAL (250/RL)^FS
+^BY2,2,72
+^FO42,95^BCN,72,Y,N,N^FD850042910447^FS
+^CF0,24
+^FO330,198^FD$24.99^FS
+^CF0,18
+^FO30,202^FDSKU: LBL-4X6-DT^FS
+^XZ`,
+
+      asset: `^XA
+^FX === 3 x 2 IT ASSET & QR INVENTORY TAG ===
+^FO18,18^GB572,370,3^FS
+^FO18,86^GB572,0,3^FS
+^CF0,30
+^FO34,38^FDPROPERTY OF IT OPERATIONS^FS
+^CF0,22
+^FO34,110^FDASSET ID: AST-009482^FS
+^FO34,144^FDMODEL: ZEBRA ZD621-203DPI^FS
+^FO34,178^FDSERIAL: D6J261104829^FS
+^FO34,212^FDLOC: ONTARIO-DC-RACK04^FS
+^FO415,105^BQN,2,5^FDQA,AST-009482|D6J261104829^FS
+^BY2,2,65
+^FO34,270^BCN,65,Y,N,N^FDAST009482^FS
+^XZ`,
+
+      multi: `^XA
+^FO30,30^GB752,1158,4^FS
+^CF0,48
+^FO60,70^FDPACKAGE 1 OF 3^FS
+^CF0,28
+^FO60,145^FDCONSIGNEE: PACIFIC FREIGHT HUB^FS
+^FO60,190^FDCONTAINER: CNT-8841-A^FS
+^BY2,3,155
+^FO115,320^BCN,155,N,N,N^FD100088410001^FS
+^XZ
+
+^XA
+^FO30,30^GB752,1158,4^FS
+^CF0,48
+^FO60,70^FDPACKAGE 2 OF 3^FS
+^CF0,28
+^FO60,145^FDCONSIGNEE: PACIFIC FREIGHT HUB^FS
+^FO60,190^FDCONTAINER: CNT-8841-B^FS
+^BY2,3,155
+^FO115,320^BCN,155,N,N,N^FD100088410002^FS
+^XZ
+
+^XA
+^FO30,30^GB752,1158,4^FS
+^CF0,48
+^FO60,70^FDPACKAGE 3 OF 3^FS
+^CF0,28
+^FO60,145^FDCONSIGNEE: PACIFIC FREIGHT HUB^FS
+^FO60,190^FDCONTAINER: CNT-8841-C^FS
+^BY2,3,155
+^FO115,320^BCN,155,N,N,N^FD100088410003^FS
+^XZ`
+    };
+
+    // =========================================================================
+    // 2. APPLICATION STATE
+    // =========================================================================
+    const state = {
+      dpmm: 8,               // 6, 8, 12, 24
+      widthIn: 4.0,          // Always stored internally in inches
+      heightIn: 6.0,         // Always stored internally in inches
+      unit: 'in',            // 'in' or 'mm'
+      rotation: 0,           // 0, 90, 180, 270
+      labelIndex: 0,         // Active label index (0-based)
+      labelCount: 1,         // Number of ^XA...^XZ blocks detected
+      zoom: 'fit',           // 'fit' or numeric scale
+      darkCanvas: false,     // Backdrop theme toggle
+      lastEngineUsed: 'api', // 'api' or 'local'
+      currentPngBlob: null,
+      currentPngDataUrl: null,
+      renderTimer: null,
+      abortController: null,
+      loadedFiles: [],       // Array of { id, name, content, labelCount }
+      activeFileId: null     // Active file ID when batch files are loaded
+    };
+
+    // =========================================================================
+    // 3. DOM ELEMENT REFERENCES
+    // =========================================================================
+    const el = {
+      editor: document.getElementById('zpl-editor'),
+      backdrop: document.getElementById('zpl-backdrop'),
+      editorDropzone: document.getElementById('editor-dropzone'),
+      dropzoneOverlay: document.getElementById('dropzone-overlay'),
+      batchFilesBar: document.getElementById('batch-files-bar'),
+      batchSummaryBadge: document.getElementById('batch-summary-badge'),
+      batchFilesList: document.getElementById('batch-files-list'),
+      btnMergeFiles: document.getElementById('btn-merge-files'),
+      btnBatchPdf: document.getElementById('btn-batch-pdf'),
+      btnClearFiles: document.getElementById('btn-clear-files'),
+      selectDpmm: document.getElementById('select-dpmm'),
+      selectPreset: document.getElementById('select-preset'),
+      selectRotation: document.getElementById('select-rotation'),
+      selectUnit: document.getElementById('select-unit'),
+      inputWidth: document.getElementById('input-width'),
+      inputHeight: document.getElementById('input-height'),
+      selectLabelIndex: document.getElementById('select-label-index'),
+      labelCountBadge: document.getElementById('label-count-badge'),
+      btnPrevLabel: document.getElementById('btn-prev-label'),
+      btnNextLabel: document.getElementById('btn-next-label'),
+      chkAutoRender: document.getElementById('chk-auto-render'),
+      btnForceRender: document.getElementById('btn-force-render'),
+      selectTemplate: document.getElementById('select-template'),
+      fileUpload: document.getElementById('file-upload'),
+      btnUpload: document.getElementById('btn-upload'),
+      btnPaste: document.getElementById('btn-paste'),
+      btnCopyZpl: document.getElementById('btn-copy-zpl'),
+      btnClear: document.getElementById('btn-clear'),
+      statLines: document.getElementById('stat-lines'),
+      statChars: document.getElementById('stat-chars'),
+      statDots: document.getElementById('stat-dots'),
+      previewViewport: document.getElementById('preview-viewport'),
+      labelStage: document.getElementById('label-stage'),
+      labelPaper: document.getElementById('label-paper'),
+      previewImage: document.getElementById('preview-image'),
+      fallbackCanvas: document.getElementById('fallback-canvas'),
+      previewLoader: document.getElementById('preview-loader'),
+      btnZoomOut: document.getElementById('btn-zoom-out'),
+      btnZoomIn: document.getElementById('btn-zoom-in'),
+      btnZoomFit: document.getElementById('btn-zoom-fit'),
+      zoomLevelLabel: document.getElementById('zoom-level-label'),
+      btnToggleBg: document.getElementById('btn-toggle-bg'),
+      bgModeText: document.getElementById('bg-mode-text'),
+      btnDownloadPng: document.getElementById('btn-download-png'),
+      btnDownloadPdf: document.getElementById('btn-download-pdf'),
+      btnPdfMenuToggle: document.getElementById('btn-pdf-menu-toggle'),
+      pdfDropdownMenu: document.getElementById('pdf-dropdown-menu'),
+      btnPdfCurrent: document.getElementById('btn-pdf-current'),
+      btnPdfAll: document.getElementById('btn-pdf-all'),
+      btnPdfAllFiles: document.getElementById('btn-pdf-all-files'),
+      dropdownAllCount: document.getElementById('dropdown-all-count'),
+      dropdownAllFilesCount: document.getElementById('dropdown-all-files-count'),
+      statusDot: document.getElementById('status-dot'),
+      statusText: document.getElementById('status-text'),
+      badgeDimensions: document.getElementById('badge-dimensions'),
+      badgeDpi: document.getElementById('badge-dpi'),
+      badgeRenderer: document.getElementById('badge-renderer'),
+      rulerWidthText: document.getElementById('ruler-width-text'),
+      rulerWidthEnd: document.getElementById('ruler-width-end'),
+      rulerHeightText: document.getElementById('ruler-height-text'),
+      rulerHeightEnd: document.getElementById('ruler-height-end'),
+      outputFilenamePreview: document.getElementById('output-filename-preview'),
+      renderFootnote: document.getElementById('render-footnote'),
+      toastContainer: document.getElementById('toast-container')
+    };
+
+    // =========================================================================
+    // 4. UTILITY HELPERS & TOAST NOTIFICATIONS
+    // =========================================================================
+    function showToast(message, type = 'info') {
+      const colors = {
+        success: 'bg-emerald-600 text-white border-emerald-500',
+        warning: 'bg-amber-600 text-white border-amber-500',
+        error: 'bg-red-600 text-white border-red-500',
+        info: 'bg-slate-900 text-white border-slate-700'
+      };
+      const toast = document.createElement('div');
+      toast.className = `pointer-events-auto px-3.5 py-2.5 rounded-lg border shadow-lg text-xs font-medium flex items-center gap-2 transition-all duration-200 ${colors[type] || colors.info}`;
+      toast.textContent = message;
+      el.toastContainer.appendChild(toast);
+      setTimeout(() => {
+        toast.style.opacity = '0';
+        toast.style.transform = 'translateY(6px)';
+        setTimeout(() => toast.remove(), 220);
+      }, 2800);
+    }
+
+    function setStatus(text, tone = 'ready') {
+      el.statusText.textContent = text;
+      const dotColors = {
+        ready: 'bg-emerald-400',
+        busy: 'bg-blue-400 animate-pulse',
+        fallback: 'bg-amber-400',
+        error: 'bg-red-400'
+      };
+      el.statusDot.className = `w-2 h-2 rounded-full ${dotColors[tone] || dotColors.ready}`;
+    }
+
+    function extractZplBlocks(zplText) {
+      const matches = zplText.match(/\^XA[\s\S]*?\^XZ/gi);
+      if (matches && matches.length > 0) {
+        return matches;
+      }
+      const trimmed = zplText.trim();
+      return trimmed ? [trimmed] : [];
+    }
+
+    function getBaseFilename() {
+      const wStr = String(state.widthIn).replace('.', '_');
+      const hStr = String(state.heightIn).replace('.', '_');
+      const dpi = Math.round(state.dpmm * 25.4);
+      return `label_${wStr}x${hStr}_${dpi}dpi`;
+    }
+
+    // =========================================================================
+    // 5. SYNTAX HIGHLIGHTING & EDITOR SYNCHRONIZATION
+    // =========================================================================
+    function escapeHtml(str) {
+      return str
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;');
+    }
+
+    function highlightZpl(code) {
+      const escaped = escapeHtml(code);
+      return escaped.replace(
+        /(\^FX[^\n\r]*)|(\^(?:XA|XZ))|(\^FD[\s\S]*?(?=\^FS|$))|([\^~][A-Z0-9]{1,2})/gi,
+        (match, comment, frame, fieldData, command) => {
+          if (comment) return `<span class="zpl-comment">${comment}</span>`;
+          if (frame) return `<span class="zpl-frame">${frame}</span>`;
+          if (fieldData) {
+            return `<span class="zpl-cmd">^FD</span><span class="zpl-data">${fieldData.slice(3)}</span>`;
+          }
+          if (command) return `<span class="zpl-cmd">${command}</span>`;
+          return match;
+        }
+      );
+    }
+
+    function updateSyntaxHighlight() {
+      const raw = el.editor.value;
+      el.backdrop.innerHTML = highlightZpl(raw) + '\n';
+
+      // Update editor line & character metrics
+      const lineCount = raw ? raw.split('\n').length : 0;
+      el.statLines.textContent = `${lineCount} line${lineCount === 1 ? '' : 's'}`;
+      el.statChars.textContent = `${raw.length} char${raw.length === 1 ? '' : 's'}`;
+
+      // Detect ^XA...^XZ blocks for multi-label selector
+      const blocks = extractZplBlocks(raw);
+      const count = Math.max(1, blocks.length);
+      if (count !== state.labelCount) {
+        state.labelCount = count;
+        if (state.labelIndex >= count) {
+          state.labelIndex = count - 1;
+        }
+        rebuildLabelIndexDropdown();
+      }
+
+      // Sync active loaded file content & label count if user edits text
+      if (state.activeFileId) {
+        const activeFile = state.loadedFiles.find(f => f.id === state.activeFileId);
+        if (activeFile && activeFile.content !== raw) {
+          activeFile.content = raw;
+          activeFile.labelCount = Math.max(1, blocks.length);
+          renderLoadedFilesBar();
+        }
+      }
+    }
+
+    function syncEditorScroll() {
+      el.backdrop.scrollTop = el.editor.scrollTop;
+      el.backdrop.scrollLeft = el.editor.scrollLeft;
+    }
+
+    function rebuildLabelIndexDropdown() {
+      el.selectLabelIndex.innerHTML = '';
+      for (let i = 0; i < state.labelCount; i++) {
+        const opt = document.createElement('option');
+        opt.value = String(i);
+        opt.textContent = `${i + 1} of ${state.labelCount}`;
+        if (i === state.labelIndex) opt.selected = true;
+        el.selectLabelIndex.appendChild(opt);
+      }
+      el.labelCountBadge.textContent = `${state.labelCount} label${state.labelCount === 1 ? '' : 's'}`;
+      el.dropdownAllCount.textContent = `${state.labelCount} pg${state.labelCount === 1 ? '' : 's'}`;
+      el.btnPrevLabel.disabled = state.labelIndex <= 0;
+      el.btnNextLabel.disabled = state.labelIndex >= state.labelCount - 1;
+    }
+
+    // =========================================================================
+    // 6. DIMENSIONS, UNITS & RULERS UPDATE
+    // =========================================================================
+    function updateDimensionDisplays() {
+      const dpi = Math.round(state.dpmm * 25.4);
+      const dotsW = Math.round(state.widthIn * dpi);
+      const dotsH = Math.round(state.heightIn * dpi);
+
+      const widthMm = (state.widthIn * 25.4).toFixed(1);
+      const heightMm = (state.heightIn * 25.4).toFixed(1);
+
+      el.statDots.textContent = `${dotsW} × ${dotsH} dots`;
+      el.badgeDimensions.textContent = `${state.widthIn}" × ${state.heightIn}"`;
+      el.badgeDpi.textContent = `${dpi} DPI (${state.dpmm} dpmm)`;
+      el.outputFilenamePreview.textContent = `${getBaseFilename()}.pdf`;
+
+      const isSideways = state.rotation === 90 || state.rotation === 270;
+      const dispWIn = isSideways ? state.heightIn : state.widthIn;
+      const dispHIn = isSideways ? state.widthIn : state.heightIn;
+      const dispWMm = isSideways ? heightMm : widthMm;
+      const dispHMm = isSideways ? widthMm : heightMm;
+
+      el.rulerWidthText.textContent = `${dispWIn}" (${dispWMm} mm)`;
+      el.rulerWidthEnd.textContent = `${dispWIn}"`;
+      el.rulerHeightText.textContent = `${dispHIn}" (${dispHMm} mm)`;
+      el.rulerHeightEnd.textContent = `${dispHIn}"`;
+    }
+
+    function applyZoomToPreview() {
+      const img = el.previewImage;
+      if (!img.naturalWidth || !img.naturalHeight) return;
+
+      const viewportW = Math.max(220, el.previewViewport.clientWidth - 72);
+      const viewportH = Math.max(220, el.previewViewport.clientHeight - 72);
+
+      let scale = 1;
+      if (state.zoom === 'fit') {
+        const scaleX = viewportW / img.naturalWidth;
+        const scaleY = viewportH / img.naturalHeight;
+        scale = Math.min(scaleX, scaleY, 1.25);
+        el.zoomLevelLabel.textContent = 'Fit';
+      } else {
+        scale = state.zoom;
+        el.zoomLevelLabel.textContent = `${Math.round(scale * 100)}%`;
+      }
+
+      img.style.width = `${Math.round(img.naturalWidth * scale)}px`;
+      img.style.height = `${Math.round(img.naturalHeight * scale)}px`;
+    }
+
+    // =========================================================================
+    // 7. CLIENT-SIDE OFFLINE FALLBACK RENDERER (CANVAS + JSBARCODE + QRCODE)
+    // =========================================================================
+    function renderZplLocallyToCanvas(zplBlock, dpmm, widthIn, heightIn, rotation) {
+      const dpi = Math.round(dpmm * 25.4);
+      const dotsW = Math.max(100, Math.round(widthIn * dpi));
+      const dotsH = Math.max(100, Math.round(heightIn * dpi));
+
+      const canvas = document.createElement('canvas');
+      canvas.width = dotsW;
+      canvas.height = dotsH;
+      const ctx = canvas.getContext('2d');
+
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(0, 0, dotsW, dotsH);
+      ctx.fillStyle = '#000000';
+      ctx.strokeStyle = '#000000';
+
+      let curX = 0;
+      let curY = 0;
+      let fontH = Math.round(30 * (dpmm / 8));
+      let barWidth = Math.max(2, Math.round(2 * (dpmm / 8)));
+      let barHeight = Math.round(100 * (dpmm / 8));
+
+      const tokens = zplBlock
+        .replace(/[\r\n]+/g, '')
+        .split(/(?=\^)/)
+        .map(t => t.trim())
+        .filter(Boolean);
+
+      for (let i = 0; i < tokens.length; i++) {
+        const tok = tokens[i];
+
+        if (tok.startsWith('^FX') || tok.startsWith('^XA') || tok.startsWith('^XZ') || tok.startsWith('^FS')) {
+          continue;
+        } else if (tok.startsWith('^FO')) {
+          const parts = tok.slice(3).split(',');
+          curX = parseInt(parts[0], 10) || 0;
+          curY = parseInt(parts[1], 10) || 0;
+        } else if (tok.startsWith('^CF')) {
+          const parts = tok.slice(3).split(',');
+          if (parts[1]) {
+            fontH = Math.max(10, parseInt(parts[1], 10) || fontH);
+          }
+        } else if (tok.startsWith('^A')) {
+          const parts = tok.slice(2).split(',');
+          if (parts[1]) {
+            fontH = Math.max(10, parseInt(parts[1], 10) || fontH);
+          }
+        } else if (tok.startsWith('^BY')) {
+          const parts = tok.slice(3).split(',');
+          if (parts[0]) barWidth = Math.max(1, parseInt(parts[0], 10) || 2);
+          if (parts[2]) barHeight = Math.max(20, parseInt(parts[2], 10) || barHeight);
+        } else if (tok.startsWith('^GB')) {
+          const parts = tok.slice(3).split(',');
+          const w = parseInt(parts[0], 10) || 0;
+          const h = parseInt(parts[1], 10) || 0;
+          const t = Math.max(1, parseInt(parts[2], 10) || 1);
+          ctx.lineWidth = t;
+          if (w === 0 || h <= t) {
+            ctx.fillRect(curX, curY, Math.max(w, t), Math.max(h, t));
+          } else if (h === 0 || w <= t) {
+            ctx.fillRect(curX, curY, Math.max(w, t), Math.max(h, t));
+          } else {
+            ctx.strokeRect(curX + t / 2, curY + t / 2, Math.max(0, w - t), Math.max(0, h - t));
+          }
+        } else if (tok.startsWith('^BC')) {
+          // Code 128 Barcode: ^BCo,h,f,g,e,m — strictly respect f = N for no bottom interpretation text
+          const params = tok.slice(3).split(',');
+          const h = parseInt(params[1], 10) || barHeight;
+          const interpFlag = (params[2] !== undefined ? params[2] : 'Y').trim().toUpperCase();
+          const showText = interpFlag === 'Y';
+          let data = '';
+          if (i + 1 < tokens.length && tokens[i + 1].startsWith('^FD')) {
+            data = tokens[i + 1].slice(3).replace(/^>[:;8]/, '');
+            i++;
+          }
+          if (data && typeof JsBarcode !== 'undefined') {
+            try {
+              const tempCanvas = document.createElement('canvas');
+              JsBarcode(tempCanvas, data, {
+                format: 'CODE128',
+                width: barWidth,
+                height: h,
+                displayValue: showText,
+                fontSize: Math.max(14, Math.round(fontH * 0.7)),
+                margin: 0,
+                background: '#ffffff',
+                lineColor: '#000000'
+              });
+              const maxAvailW = Math.max(80, dotsW - curX - 24);
+              const drawW = Math.min(tempCanvas.width, maxAvailW);
+              ctx.drawImage(tempCanvas, curX, curY, drawW, tempCanvas.height);
+            } catch (e) {
+              ctx.fillStyle = '#000000';
+              ctx.fillRect(curX, curY, 180, h);
+            }
+          }
+        } else if (tok.startsWith('^BQ')) {
+          const params = tok.slice(3).split(',');
+          const mag = Math.max(2, parseInt(params[2], 10) || 4);
+          let data = '';
+          if (i + 1 < tokens.length && tokens[i + 1].startsWith('^FD')) {
+            data = tokens[i + 1].slice(3).replace(/^[A-Z]{1,2},/, '');
+            i++;
+          }
+          if (data && typeof qrcode !== 'undefined') {
+            try {
+              const qr = qrcode(0, 'M');
+              qr.addData(data);
+              qr.make();
+              const count = qr.getModuleCount();
+              const cell = mag * Math.max(2, Math.round(dpmm / 4));
+              for (let r = 0; r < count; r++) {
+                for (let c = 0; c < count; c++) {
+                  if (qr.isDark(r, c)) {
+                    ctx.fillRect(curX + c * cell, curY + r * cell, cell, cell);
+                  }
+                }
+              }
+            } catch (e) {
+              ctx.strokeRect(curX, curY, 90, 90);
+            }
+          }
+        } else if (tok.startsWith('^FD')) {
+          const text = tok.slice(3);
+          ctx.fillStyle = '#000000';
+          ctx.font = `700 ${fontH}px "Inter", Arial, sans-serif`;
+          ctx.textBaseline = 'top';
+          ctx.fillText(text, curX, curY);
+        }
+      }
+
+      if (rotation && rotation !== 0) {
+        const rotCanvas = document.createElement('canvas');
+        const isSideways = rotation === 90 || rotation === 270;
+        rotCanvas.width = isSideways ? dotsH : dotsW;
+        rotCanvas.height = isSideways ? dotsW : dotsH;
+        const rCtx = rotCanvas.getContext('2d');
+        rCtx.translate(rotCanvas.width / 2, rotCanvas.height / 2);
+        rCtx.rotate((rotation * Math.PI) / 180);
+        rCtx.drawImage(canvas, -dotsW / 2, -dotsH / 2);
+        return rotCanvas.toDataURL('image/png');
+      }
+
+      return canvas.toDataURL('image/png');
+    }
+
+    // =========================================================================
+    // 8. LIVE PREVIEW RENDERING (LABELARY API + AUTOMATIC OFFLINE FALLBACK)
+    // =========================================================================
+    async function renderPreview() {
+      const zpl = el.editor.value.trim();
+      if (!zpl) {
+        setStatus('Empty ZPL', 'error');
+        return;
+      }
+
+      updateDimensionDisplays();
+
+      if (state.abortController) {
+        state.abortController.abort();
+      }
+      state.abortController = new AbortController();
+
+      el.previewLoader.classList.remove('hidden');
+      setStatus('Rendering...', 'busy');
+
+      const endpoint = `https://api.labelary.com/v1/printers/${state.dpmm}dpmm/labels/${state.widthIn}x${state.heightIn}/${state.labelIndex}/`;
+
+      try {
+        const response = await fetch(endpoint, {
+          method: 'POST',
+          headers: {
+            'Accept': 'image/png',
+            'Content-Type': 'application/x-www-form-urlencoded',
+            'X-Rotation': String(state.rotation)
+          },
+          body: zpl,
+          signal: state.abortController.signal
+        });
+
+        if (!response.ok) {
+          throw new Error(`Labelary HTTP ${response.status}`);
+        }
+
+        const totalHeader = parseInt(response.headers.get('X-Total-Count') || '0', 10);
+        if (totalHeader > 0 && totalHeader !== state.labelCount) {
+          state.labelCount = totalHeader;
+          rebuildLabelIndexDropdown();
+        }
+
+        const blob = await response.blob();
+        const objectUrl = URL.createObjectURL(blob);
+
+        if (state.currentPngDataUrl && state.currentPngDataUrl.startsWith('blob:')) {
+          URL.revokeObjectURL(state.currentPngDataUrl);
+        }
+
+        state.currentPngBlob = blob;
+        state.currentPngDataUrl = objectUrl;
+        state.lastEngineUsed = 'api';
+
+        el.previewImage.onload = () => {
+          applyZoomToPreview();
+          el.previewLoader.classList.add('hidden');
+        };
+        el.previewImage.src = objectUrl;
+
+        el.badgeRenderer.textContent = 'Labelary API';
+        setStatus('Rendered', 'ready');
+      } catch (err) {
+        if (err.name === 'AbortError') return;
+
+        // Offline / Fallback Renderer
+        const blocks = extractZplBlocks(zpl);
+        const activeBlock = blocks[state.labelIndex] || blocks[0] || zpl;
+        const dataUrl = renderZplLocallyToCanvas(
+          activeBlock,
+          state.dpmm,
+          state.widthIn,
+          state.heightIn,
+          state.rotation
+        );
+
+        state.currentPngBlob = null;
+        state.currentPngDataUrl = dataUrl;
+        state.lastEngineUsed = 'local';
+
+        el.previewImage.onload = () => {
+          applyZoomToPreview();
+          el.previewLoader.classList.add('hidden');
+        };
+        el.previewImage.src = dataUrl;
+
+        el.badgeRenderer.textContent = 'Local Canvas Engine';
+        setStatus('Rendered (Local)', 'fallback');
+      }
+    }
+
+    function scheduleAutoRender() {
+      if (!el.chkAutoRender.checked) return;
+      clearTimeout(state.renderTimer);
+      state.renderTimer = setTimeout(() => {
+        renderPreview();
+      }, 450);
+    }
+
+    // =========================================================================
+    // 9. MULTI-FILE BATCH MANAGEMENT & PDF/PNG EXPORT ENGINE
+    // =========================================================================
+    function renderLoadedFilesBar() {
+      const files = state.loadedFiles;
+      el.dropdownAllFilesCount.textContent = `${Math.max(1, files.length)} file${files.length === 1 ? '' : 's'}`;
+
+      if (files.length === 0) {
+        el.batchFilesBar.classList.add('hidden');
+        return;
+      }
+
+      el.batchFilesBar.classList.remove('hidden');
+      const totalLabels = files.reduce((sum, f) => sum + f.labelCount, 0);
+      el.batchSummaryBadge.textContent = `${files.length} file${files.length === 1 ? '' : 's'} · ${totalLabels} label${totalLabels === 1 ? '' : 's'}`;
+
+      el.batchFilesList.innerHTML = '';
+      files.forEach((file) => {
+        const isActive = file.id === state.activeFileId;
+        const pill = document.createElement('div');
+        pill.className = `group flex items-center gap-1.5 pl-2.5 pr-1.5 py-1 rounded-lg border text-xs shrink-0 transition cursor-pointer ${
+          isActive
+            ? 'bg-blue-600 border-blue-600 text-white font-medium shadow-2xs'
+            : 'bg-white border-slate-300 text-slate-700 hover:bg-slate-100'
+        }`;
+
+        const nameSpan = document.createElement('span');
+        nameSpan.className = 'truncate max-w-[150px] font-mono text-[11px]';
+        nameSpan.textContent = file.name;
+        nameSpan.title = `${file.name} (${file.labelCount} label${file.labelCount === 1 ? '' : 's'})`;
+
+        const countBadge = document.createElement('span');
+        countBadge.className = `text-[10px] font-mono px-1.5 py-0.2 rounded-full ${
+          isActive ? 'bg-blue-500 text-white' : 'bg-slate-100 text-slate-600 border border-slate-200'
+        }`;
+        countBadge.textContent = `${file.labelCount}`;
+
+        const removeBtn = document.createElement('button');
+        removeBtn.type = 'button';
+        removeBtn.className = `p-0.5 rounded transition cursor-pointer ${
+          isActive
+            ? 'hover:bg-blue-500 text-blue-100 hover:text-white'
+            : 'hover:bg-red-50 text-slate-400 hover:text-red-600'
+        }`;
+        removeBtn.title = `Remove ${file.name}`;
+        removeBtn.innerHTML = '<svg class="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M18 6 6 18M6 6l12 12"/></svg>';
+
+        pill.addEventListener('click', () => {
+          selectLoadedFile(file.id);
+        });
+
+        removeBtn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          removeLoadedFile(file.id);
+        });
+
+        pill.appendChild(nameSpan);
+        pill.appendChild(countBadge);
+        pill.appendChild(removeBtn);
+        el.batchFilesList.appendChild(pill);
+      });
+    }
+
+    function selectLoadedFile(fileId) {
+      const target = state.loadedFiles.find(f => f.id === fileId);
+      if (!target) return;
+      state.activeFileId = target.id;
+      state.labelIndex = 0;
+      el.editor.value = target.content;
+      updateSyntaxHighlight();
+      rebuildLabelIndexDropdown();
+      renderLoadedFilesBar();
+      renderPreview();
+    }
+
+    function removeLoadedFile(fileId) {
+      const idx = state.loadedFiles.findIndex(f => f.id === fileId);
+      if (idx === -1) return;
+      state.loadedFiles.splice(idx, 1);
+
+      if (state.loadedFiles.length === 0) {
+        state.activeFileId = null;
+      } else if (state.activeFileId === fileId) {
+        const nextFile = state.loadedFiles[Math.min(idx, state.loadedFiles.length - 1)];
+        selectLoadedFile(nextFile.id);
+        return;
+      }
+      renderLoadedFilesBar();
+    }
+
+    async function handleMultipleFilesImport(fileList) {
+      const validFiles = Array.from(fileList || []).filter(f =>
+        /\.(zpl|txt|prn|lbl)$/i.test(f.name) || f.type === 'text/plain' || f.type === ''
+      );
+
+      if (validFiles.length === 0) {
+        showToast('Please select valid ZPL text files (.zpl, .txt, .prn, .lbl).', 'warning');
+        return;
+      }
+
+      const readPromises = validFiles.map(file => new Promise((resolve) => {
+        const reader = new FileReader();
+        reader.onload = (evt) => {
+          const content = String(evt.target.result || '');
+          const blocks = extractZplBlocks(content);
+          resolve({
+            id: `file_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+            name: file.name,
+            content,
+            labelCount: Math.max(1, blocks.length)
+          });
+        };
+        reader.onerror = () => resolve(null);
+        reader.readAsText(file);
+      }));
+
+      const imported = (await Promise.all(readPromises)).filter(Boolean);
+      if (imported.length === 0) return;
+
+      state.loadedFiles.push(...imported);
+      selectLoadedFile(imported[0].id);
+
+      const totalNewLabels = imported.reduce((sum, f) => sum + f.labelCount, 0);
+      showToast(
+        imported.length === 1
+          ? `Loaded "${imported[0].name}" (${totalNewLabels} label${totalNewLabels === 1 ? '' : 's'})`
+          : `Loaded ${imported.length} ZPL files (${totalNewLabels} total labels)`,
+        'success'
+      );
+    }
+
+    function mergeAllLoadedFiles() {
+      if (state.loadedFiles.length < 2) {
+        showToast('Load at least 2 files to merge into a combined batch.', 'info');
+        return;
+      }
+      const mergedZpl = state.loadedFiles
+        .map(f => `^FX === SOURCE FILE: ${f.name} ===\n${f.content.trim()}`)
+        .join('\n\n');
+
+      const mergedEntry = {
+        id: `file_${Date.now()}_merged`,
+        name: `merged_${state.loadedFiles.length}_files.zpl`,
+        content: mergedZpl,
+        labelCount: Math.max(1, extractZplBlocks(mergedZpl).length)
+      };
+
+      state.loadedFiles = [mergedEntry];
+      selectLoadedFile(mergedEntry.id);
+      showToast(`Merged all files into "${mergedEntry.name}" (${mergedEntry.labelCount} labels)`, 'success');
+    }
+
+    async function downloadPng() {
+      if (!state.currentPngDataUrl) {
+        showToast('No rendered label available to export.', 'warning');
+        return;
+      }
+      const link = document.createElement('a');
+      link.href = state.currentPngDataUrl;
+      link.download = `${getBaseFilename()}_label${state.labelIndex + 1}.png`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      showToast('PNG label downloaded!', 'success');
+    }
+
+    async function downloadPdf(exportAllLabels = false) {
+      const zpl = el.editor.value.trim();
+      if (!zpl) {
+        showToast('Please enter ZPL code before exporting PDF.', 'warning');
+        return;
+      }
+
+      el.previewLoader.classList.remove('hidden');
+      const activeFile = state.loadedFiles.find(f => f.id === state.activeFileId);
+      const baseName = activeFile
+        ? activeFile.name.replace(/\.[^.]+$/, '')
+        : getBaseFilename();
+
+      const filename = exportAllLabels && state.labelCount > 1
+        ? `${baseName}_all_${state.labelCount}labels.pdf`
+        : `${baseName}_label${state.labelIndex + 1}.pdf`;
+
+      try {
+        const endpoint = exportAllLabels
+          ? `https://api.labelary.com/v1/printers/${state.dpmm}dpmm/labels/${state.widthIn}x${state.heightIn}/`
+          : `https://api.labelary.com/v1/printers/${state.dpmm}dpmm/labels/${state.widthIn}x${state.heightIn}/${state.labelIndex}/`;
+
+        const response = await fetch(endpoint, {
+          method: 'POST',
+          headers: {
+            'Accept': 'application/pdf',
+            'Content-Type': 'application/x-www-form-urlencoded',
+            'X-Rotation': String(state.rotation)
+          },
+          body: zpl
+        });
+
+        if (!response.ok) {
+          throw new Error(`PDF API error ${response.status}`);
+        }
+
+        const pdfBlob = await response.blob();
+        const url = URL.createObjectURL(pdfBlob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        setTimeout(() => URL.revokeObjectURL(url), 5000);
+
+        showToast(`Vector PDF exported (${exportAllLabels ? 'All Labels' : 'Single Label'})`, 'success');
+      } catch (err) {
+        try {
+          const { jsPDF } = window.jspdf;
+          const isSideways = state.rotation === 90 || state.rotation === 270;
+          const pageW = isSideways ? state.heightIn : state.widthIn;
+          const pageH = isSideways ? state.widthIn : state.heightIn;
+          const orientation = pageW > pageH ? 'landscape' : 'portrait';
+
+          const doc = new jsPDF({
+            orientation,
+            unit: 'in',
+            format: [pageW, pageH],
+            compress: true
+          });
+
+          const blocks = extractZplBlocks(zpl);
+          const targetBlocks = exportAllLabels ? blocks : [blocks[state.labelIndex] || zpl];
+
+          targetBlocks.forEach((blk, idx) => {
+            if (idx > 0) {
+              doc.addPage([pageW, pageH], orientation);
+            }
+            const imgData = renderZplLocallyToCanvas(
+              blk,
+              state.dpmm,
+              state.widthIn,
+              state.heightIn,
+              state.rotation
+            );
+            doc.addImage(imgData, 'PNG', 0, 0, pageW, pageH, undefined, 'FAST');
+          });
+
+          doc.save(filename);
+          showToast('PDF generated via Local Fallback Engine!', 'success');
+        } catch (pdfErr) {
+          showToast('Failed to generate PDF file.', 'error');
+        }
+      } finally {
+        el.previewLoader.classList.add('hidden');
+      }
+    }
+
+    async function downloadAllLoadedFilesAsPdf() {
+      if (state.loadedFiles.length === 0) {
+        return downloadPdf(true);
+      }
+
+      const combinedZpl = state.loadedFiles
+        .map(f => f.content.trim())
+        .filter(Boolean)
+        .join('\n');
+
+      if (!combinedZpl) {
+        showToast('Loaded files contain no ZPL content.', 'warning');
+        return;
+      }
+
+      const totalLabels = state.loadedFiles.reduce((sum, f) => sum + f.labelCount, 0);
+      const filename = `batch_${state.loadedFiles.length}files_${totalLabels}labels_${getBaseFilename()}.pdf`;
+
+      el.previewLoader.classList.remove('hidden');
+
+      try {
+        const endpoint = `https://api.labelary.com/v1/printers/${state.dpmm}dpmm/labels/${state.widthIn}x${state.heightIn}/`;
+        const response = await fetch(endpoint, {
+          method: 'POST',
+          headers: {
+            'Accept': 'application/pdf',
+            'Content-Type': 'application/x-www-form-urlencoded',
+            'X-Rotation': String(state.rotation)
+          },
+          body: combinedZpl
+        });
+
+        if (!response.ok) {
+          throw new Error(`Batch PDF API error ${response.status}`);
+        }
+
+        const pdfBlob = await response.blob();
+        const url = URL.createObjectURL(pdfBlob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        setTimeout(() => URL.revokeObjectURL(url), 5000);
+
+        showToast(`Batch PDF exported (${state.loadedFiles.length} files, ${totalLabels} pages)!`, 'success');
+      } catch (err) {
+        try {
+          const { jsPDF } = window.jspdf;
+          const isSideways = state.rotation === 90 || state.rotation === 270;
+          const pageW = isSideways ? state.heightIn : state.widthIn;
+          const pageH = isSideways ? state.widthIn : state.heightIn;
+          const orientation = pageW > pageH ? 'landscape' : 'portrait';
+
+          const doc = new jsPDF({
+            orientation,
+            unit: 'in',
+            format: [pageW, pageH],
+            compress: true
+          });
+
+          let pageIndex = 0;
+          for (const file of state.loadedFiles) {
+            const blocks = extractZplBlocks(file.content);
+            for (const blk of blocks) {
+              if (pageIndex > 0) {
+                doc.addPage([pageW, pageH], orientation);
+              }
+              const imgData = renderZplLocallyToCanvas(
+                blk,
+                state.dpmm,
+                state.widthIn,
+                state.heightIn,
+                state.rotation
+              );
+              doc.addImage(imgData, 'PNG', 0, 0, pageW, pageH, undefined, 'FAST');
+              pageIndex++;
+            }
+          }
+
+          doc.save(filename);
+          showToast(`Batch PDF generated via Local Engine (${pageIndex} pages)!`, 'success');
+        } catch (pdfErr) {
+          showToast('Failed to generate multi-file batch PDF.', 'error');
+        }
+      } finally {
+        el.previewLoader.classList.add('hidden');
+      }
+    }
+
+    // =========================================================================
+    // 10. EVENT LISTENERS & INITIALIZATION
+    // =========================================================================
+    el.editor.addEventListener('input', () => {
+      updateSyntaxHighlight();
+      scheduleAutoRender();
+    });
+
+    el.editor.addEventListener('scroll', syncEditorScroll);
+
+    // Preset Templates
+    el.selectTemplate.addEventListener('change', (e) => {
+      const key = e.target.value;
+      if (!ZPL_TEMPLATES[key]) return;
+      state.activeFileId = null;
+      state.labelIndex = 0;
+      el.editor.value = ZPL_TEMPLATES[key];
+
+      if (key === 'shipping' || key === 'multi') {
+        state.widthIn = 4.0;
+        state.heightIn = 6.0;
+        el.selectPreset.value = '4x6';
+      } else if (key === 'product') {
+        state.widthIn = 2.25;
+        state.heightIn = 1.25;
+        el.selectPreset.value = '2.25x1.25';
+      } else if (key === 'asset') {
+        state.widthIn = 3.0;
+        state.heightIn = 2.0;
+        el.selectPreset.value = '3x2';
+      }
+      syncDimensionInputs();
+      updateSyntaxHighlight();
+      rebuildLabelIndexDropdown();
+      renderLoadedFilesBar();
+      renderPreview();
+      e.target.selectedIndex = 0;
+    });
+
+    // Multi-File Upload & Drag-and-Drop
+    el.btnUpload.addEventListener('click', () => el.fileUpload.click());
+    el.fileUpload.addEventListener('change', async (e) => {
+      await handleMultipleFilesImport(e.target.files);
+      e.target.value = '';
+    });
+
+    let dragCounter = 0;
+    el.editorDropzone.addEventListener('dragenter', (e) => {
+      e.preventDefault();
+      dragCounter++;
+      el.dropzoneOverlay.classList.remove('hidden');
+    });
+    el.editorDropzone.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'copy';
+    });
+    el.editorDropzone.addEventListener('dragleave', (e) => {
+      e.preventDefault();
+      dragCounter = Math.max(0, dragCounter - 1);
+      if (dragCounter === 0) {
+        el.dropzoneOverlay.classList.add('hidden');
+      }
+    });
+    el.editorDropzone.addEventListener('drop', async (e) => {
+      e.preventDefault();
+      dragCounter = 0;
+      el.dropzoneOverlay.classList.add('hidden');
+      if (e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+        await handleMultipleFilesImport(e.dataTransfer.files);
+      }
+    });
+
+    // Loaded Files Manager Bar Actions
+    el.btnMergeFiles.addEventListener('click', mergeAllLoadedFiles);
+    el.btnBatchPdf.addEventListener('click', downloadAllLoadedFilesAsPdf);
+    el.btnClearFiles.addEventListener('click', () => {
+      state.loadedFiles = [];
+      state.activeFileId = null;
+      renderLoadedFilesBar();
+      showToast('Closed loaded files batch.', 'info');
+    });
+
+    // Clipboard & Clear Actions
+    el.btnPaste.addEventListener('click', async () => {
+      try {
+        const text = await navigator.clipboard.readText();
+        if (text) {
+          el.editor.value = text;
+          updateSyntaxHighlight();
+          renderPreview();
+          showToast('Pasted ZPL from clipboard.', 'success');
+        }
+      } catch (err) {
+        showToast('Use Ctrl+V / Cmd+V inside the editor to paste.', 'info');
+      }
+    });
+
+    el.btnCopyZpl.addEventListener('click', () => {
+      el.editor.select();
+      document.execCommand('copy');
+      window.getSelection()?.removeAllRanges();
+      showToast('ZPL code copied to clipboard!', 'success');
+    });
+
+    el.btnClear.addEventListener('click', () => {
+      el.editor.value = '';
+      updateSyntaxHighlight();
+      showToast('Editor cleared.', 'info');
+    });
+
+    // Print Density, Size Presets, Custom Dimensions & Rotation
+    function syncDimensionInputs() {
+      if (state.unit === 'in') {
+        el.inputWidth.value = Number(state.widthIn.toFixed(2));
+        el.inputHeight.value = Number(state.heightIn.toFixed(2));
+      } else {
+        el.inputWidth.value = Number((state.widthIn * 25.4).toFixed(1));
+        el.inputHeight.value = Number((state.heightIn * 25.4).toFixed(1));
+      }
+    }
+
+    el.selectDpmm.addEventListener('change', (e) => {
+      state.dpmm = parseInt(e.target.value, 10);
+      renderPreview();
+    });
+
+    el.selectPreset.addEventListener('change', (e) => {
+      const val = e.target.value;
+      if (val === 'custom') return;
+      const [w, h] = val.split('x').map(Number);
+      if (w && h) {
+        state.widthIn = w;
+        state.heightIn = h;
+        syncDimensionInputs();
+        renderPreview();
+      }
+    });
+
+    el.selectUnit.addEventListener('change', (e) => {
+      state.unit = e.target.value;
+      syncDimensionInputs();
+    });
+
+    function handleCustomDimensionChange() {
+      const rawW = parseFloat(el.inputWidth.value) || 4;
+      const rawH = parseFloat(el.inputHeight.value) || 6;
+      state.widthIn = state.unit === 'in' ? rawW : Number((rawW / 25.4).toFixed(3));
+      state.heightIn = state.unit === 'in' ? rawH : Number((rawH / 25.4).toFixed(3));
+      el.selectPreset.value = 'custom';
+      renderPreview();
+    }
+
+    el.inputWidth.addEventListener('change', handleCustomDimensionChange);
+    el.inputHeight.addEventListener('change', handleCustomDimensionChange);
+
+    el.selectRotation.addEventListener('change', (e) => {
+      state.rotation = parseInt(e.target.value, 10);
+      renderPreview();
+    });
+
+    // Multi-Label Navigation
+    el.selectLabelIndex.addEventListener('change', (e) => {
+      state.labelIndex = parseInt(e.target.value, 10) || 0;
+      rebuildLabelIndexDropdown();
+      renderPreview();
+    });
+
+    el.btnPrevLabel.addEventListener('click', () => {
+      if (state.labelIndex > 0) {
+        state.labelIndex--;
+        rebuildLabelIndexDropdown();
+        renderPreview();
+      }
+    });
+
+    el.btnNextLabel.addEventListener('click', () => {
+      if (state.labelIndex < state.labelCount - 1) {
+        state.labelIndex++;
+        rebuildLabelIndexDropdown();
+        renderPreview();
+      }
+    });
+
+    // Zoom & Backdrop Controls
+    el.btnZoomIn.addEventListener('click', () => {
+      const current = state.zoom === 'fit' ? 0.75 : state.zoom;
+      state.zoom = Math.min(2.5, Number((current + 0.25).toFixed(2)));
+      applyZoomToPreview();
+    });
+
+    el.btnZoomOut.addEventListener('click', () => {
+      const current = state.zoom === 'fit' ? 0.75 : state.zoom;
+      state.zoom = Math.max(0.25, Number((current - 0.25).toFixed(2)));
+      applyZoomToPreview();
+    });
+
+    el.btnZoomFit.addEventListener('click', () => {
+      state.zoom = 'fit';
+      applyZoomToPreview();
+    });
+
+    el.btnToggleBg.addEventListener('click', () => {
+      state.darkCanvas = !state.darkCanvas;
+      el.previewViewport.classList.toggle('preview-grid-light', !state.darkCanvas);
+      el.previewViewport.classList.toggle('preview-grid-dark', state.darkCanvas);
+      el.bgModeText.textContent = state.darkCanvas ? 'Dark Grid' : 'Light Grid';
+    });
+
+    window.addEventListener('resize', applyZoomToPreview);
+
+    // Export Buttons & Dropdown
+    el.btnForceRender.addEventListener('click', renderPreview);
+    el.btnDownloadPng.addEventListener('click', downloadPng);
+    el.btnDownloadPdf.addEventListener('click', () => downloadPdf(false));
+
+    el.btnPdfMenuToggle.addEventListener('click', (e) => {
+      e.stopPropagation();
+      el.pdfDropdownMenu.classList.toggle('hidden');
+    });
+
+    document.addEventListener('click', () => {
+      el.pdfDropdownMenu.classList.add('hidden');
+    });
+
+    el.btnPdfCurrent.addEventListener('click', () => {
+      el.pdfDropdownMenu.classList.add('hidden');
+      downloadPdf(false);
+    });
+
+    el.btnPdfAll.addEventListener('click', () => {
+      el.pdfDropdownMenu.classList.add('hidden');
+      downloadPdf(true);
+    });
+
+    el.btnPdfAllFiles.addEventListener('click', () => {
+      el.pdfDropdownMenu.classList.add('hidden');
+      downloadAllLoadedFilesAsPdf();
+    });
+
+    // Boot Application
+    window.addEventListener('DOMContentLoaded', () => {
+      if (typeof lucide !== 'undefined') {
+        lucide.createIcons();
+      }
+      el.editor.value = ZPL_TEMPLATES.shipping;
+      updateSyntaxHighlight();
+      rebuildLabelIndexDropdown();
+      renderLoadedFilesBar();
+      renderPreview();
+    });
+  </script>
+</body>
+</html>
